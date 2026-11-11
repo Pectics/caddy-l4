@@ -1,6 +1,6 @@
 # caddy-l4
 
-Caddy `2.11.9` with [caddy-l4](https://github.com/mholt/caddy-l4) `v0.1.2`, built by GitHub Actions.
+Caddy `2.11.9` with [caddy-l4](https://github.com/mholt/caddy-l4) master `eafc300` (includes `caddy.packetconns.layer4`), built by GitHub Actions.
 
 ## 构建
 

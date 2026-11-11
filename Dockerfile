@@ -1,5 +1,7 @@
 ARG CADDY_VERSION=2.11.9
-ARG CADDY_L4_VERSION=v0.1.2
+# No caddy-l4 release includes caddy.packetconns.layer4 yet;
+# pin the master commit that registers the UDP packet conn wrapper.
+ARG CADDY_L4_VERSION=eafc300ef23bcb2a28cc329a18e1e98bcd2b7cee
 
 FROM caddy:${CADDY_VERSION}-builder AS builder
 ARG CADDY_VERSION

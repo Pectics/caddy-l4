@@ -12,7 +12,7 @@ on:
         type: string
       caddy_l4_version:
         description: caddy-l4 version
-        default: v0.1.2
+        default: eafc300ef23bcb2a28cc329a18e1e98bcd2b7cee
         type: string
 
 permissions:
@@ -21,7 +21,7 @@ permissions:
 
 env:
   CADDY_VERSION: ${{ inputs.caddy_version || '2.11.9' }}
-  CADDY_L4_VERSION: ${{ inputs.caddy_l4_version || 'v0.1.2' }}
+  CADDY_L4_VERSION: ${{ inputs.caddy_l4_version || 'eafc300ef23bcb2a28cc329a18e1e98bcd2b7cee' }}
 
 jobs:
   build:
@@ -50,6 +50,7 @@ jobs:
           grep -qx 'layer4' modules.txt
           grep -q '^layer4.handlers.proxy$' modules.txt
           grep -q '^layer4.matchers.tls$' modules.txt
+          grep -qx 'caddy.packetconns.layer4' modules.txt
 
       - name: Login to GHCR
         uses: docker/login-action@v3
@@ -87,7 +88,7 @@ jobs:
             echo "## caddy-l4 image"
             echo ""
             echo "- Caddy: \`${CADDY_VERSION}\`"
-            echo "- caddy-l4: \`${CADDY_L4_VERSION}\`"
+            echo "- caddy-l4: \`${CADDY_L4_VERSION:0:12}\` (master, includes packet conn wrapper)"
             echo "- Image: \`${IMAGE}:${CADDY_VERSION}\`"
             echo ""
             echo "### A: pull from GHCR (package must be public)"

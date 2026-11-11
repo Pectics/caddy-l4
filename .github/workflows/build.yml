@@ -1,0 +1,110 @@
+name: build-caddy-l4
+
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      caddy_version:
+        description: Caddy version
+        default: 2.11.9
+        type: string
+      caddy_l4_version:
+        description: caddy-l4 version
+        default: v0.1.2
+        type: string
+
+permissions:
+  contents: read
+  packages: write
+
+env:
+  CADDY_VERSION: ${{ inputs.caddy_version || '2.11.9' }}
+  CADDY_L4_VERSION: ${{ inputs.caddy_l4_version || 'v0.1.2' }}
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          load: true
+          tags: caddy-l4:local
+          build-args: |
+            CADDY_VERSION=${{ env.CADDY_VERSION }}
+            CADDY_L4_VERSION=${{ env.CADDY_L4_VERSION }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Verify layer4 modules
+        run: |
+          docker run --rm caddy-l4:local caddy list-modules | tee modules.txt
+          grep -qx 'layer4' modules.txt
+          grep -q '^layer4.handlers.proxy$' modules.txt
+          grep -q '^layer4.matchers.tls$' modules.txt
+
+      - name: Login to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Push tags
+        run: |
+          IMAGE="ghcr.io/$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')"
+          SHORT_SHA="${GITHUB_SHA::7}"
+          for TAG in "${CADDY_VERSION}" "${CADDY_VERSION}-amd64" latest "sha-${SHORT_SHA}"; do
+            docker tag caddy-l4:local "${IMAGE}:${TAG}"
+            docker push "${IMAGE}:${TAG}"
+          done
+
+      - name: Export image tarball
+        run: |
+          docker tag caddy-l4:local "caddy-l4:${CADDY_VERSION}"
+          docker save "caddy-l4:${CADDY_VERSION}" | gzip -1 > "caddy-l4_${CADDY_VERSION}_amd64.tar.gz"
+          ls -lh "caddy-l4_${CADDY_VERSION}_amd64.tar.gz"
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: caddy-l4-${{ env.CADDY_VERSION }}-amd64
+          path: caddy-l4_*.tar.gz
+          retention-days: 14
+
+      - name: Summary
+        run: |
+          IMAGE="ghcr.io/$(echo "${GITHUB_REPOSITORY}" | tr '[:upper:]' '[:lower:]')"
+          {
+            echo "## caddy-l4 image"
+            echo ""
+            echo "- Caddy: \`${CADDY_VERSION}\`"
+            echo "- caddy-l4: \`${CADDY_L4_VERSION}\`"
+            echo "- Image: \`${IMAGE}:${CADDY_VERSION}\`"
+            echo ""
+            echo "### A: pull from GHCR (package must be public)"
+            echo '```bash'
+            echo "docker pull ${IMAGE}:${CADDY_VERSION}"
+            echo '```'
+            echo ""
+            echo "### B: load artifact"
+            echo '```bash'
+            echo "gunzip -c caddy-l4_${CADDY_VERSION}_amd64.tar.gz | docker load"
+            echo '```'
+            echo ""
+            echo "### Replace existing service"
+            echo '```yaml'
+            echo "services:"
+            echo "  caddy:"
+            echo "    image: ${IMAGE}:${CADDY_VERSION}"
+            echo '```'
+            echo 'Then run `docker compose up -d caddy`.'
+          } >> "$GITHUB_STEP_SUMMARY"
